@@ -1,5 +1,5 @@
-# Use a Debian-based OpenJDK image
-FROM eclipse-temurin:17.0.16_8-jdk-alpine
+# Use an Alpine-based OpenJDK image
+FROM eclipse-temurin:17-jdk-alpine
 
 # Define environment variables.
 ENV BASE_INSTALL_DIR=/opt \
@@ -46,5 +46,5 @@ EXPOSE 8081
 
 # Run mule in console mode (needed by Docker)
 #ENTRYPOINT ["tail", "-f", "/dev/null"]
-ENTRYPOINT ["./bin/mule"]
+ENTRYPOINT ["./bin/mule-container"]
 CMD [""]
