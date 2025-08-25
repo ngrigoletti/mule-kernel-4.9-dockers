@@ -9,6 +9,7 @@ The images expose port `8081`, mount common Mule folders as volumes, and run the
 - Dockerfile.eclipse-temurin-alpine: Alpine with official Eclipse Temurin 17 ~ 880MB
 - Dockerfile.eclipse-temurin-alpine-x86_64: Alpine with manually installed Temurin JDK 17 (amd64 only) ~ 763MB
 - Dockerfile.openjdk-debian: Debian slim with OpenJDK 17 (with support for Arm64 on MacOSX) ~ 890MB
+- Dockerfile.openjdk-debian-nowrapper: Debian slim with OpenJDK 17 w/o Tanuki wrapper (Experimental only!) ~ 867MB
 
 All variants:
 - Install Mule Standalone `4.9.0` under `/opt/mule-standalone-4.9.0` and symlink to `/opt/mule`.
@@ -34,6 +35,9 @@ docker build -t mule:4.9-temurin -f Dockerfile.eclipse-temurin-alpine .
 
 # Debian slim + OpenJDK (with support for Arm64 on MacOSX)
 docker build -t mule:4.9-debian -f Dockerfile.openjdk-debian .
+
+# Debian slim + OpenJDK without Tanuki wrapper
+docker build -t mule:4.9-debian -f Dockerfile.openjdk-debian-nowrapper .
 ```
 
 Run the container:

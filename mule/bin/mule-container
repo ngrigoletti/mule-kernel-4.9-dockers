@@ -1,0 +1,241 @@
+#!/bin/bash
+
+# Run Mule Kernel 4.9 directly with Java (no Tanuki wrapper)
+#
+# Usage:
+#   ./mule-container run [args]     # foreground
+#   ./mule-container start [args]   # background
+#   ./mule-container stop           # stop background
+#   ./mule-container status         # status
+#
+# Env vars:
+#   MULE_HOME        Path to Mule standalone (default: ./mule-standalone-4.9.0)
+#   MULE_BASE        Mule base dir (default: $MULE_HOME)
+#   JAVA_HOME        JDK/JRE home (if unset, uses `java` on PATH)
+#   MULE_HEAP        Heap size for -Xms/-Xmx (default: 1024m)
+#   MULE_JAVA_OPTS   Extra JVM options appended to defaults
+#   MULE_DEBUG       If 'true', enables JDWP on port 5005 (suspend=n)
+#   MULE_VERBOSE     If 'true', adds -Dmule.runtime.verbose=true
+#   MULE_JPMS        If 'true', try JPMS mode (default: false)
+
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+: "${MULE_HOME:="$SCRIPT_DIR/mule-standalone-4.9.0"}"
+: "${MULE_BASE:="${MULE_BASE:-$MULE_HOME}"}"
+
+if [[ ! -d "$MULE_HOME" ]]; then
+  echo "Error: MULE_HOME not found at '$MULE_HOME'" >&2
+  echo "Set MULE_HOME or place mule-standalone-4.9.0/ in repo root." >&2
+  exit 1
+fi
+
+mkdir -p "$MULE_HOME/logs"
+
+# Resolve Java
+JAVA_CMD=""
+if [[ -n "${JAVA_HOME:-}" ]] && [[ -x "$JAVA_HOME/bin/java" ]]; then
+  JAVA_CMD="$JAVA_HOME/bin/java"
+else
+  if command -v java >/dev/null 2>&1; then
+    JAVA_CMD="$(command -v java)"
+  else
+    echo "Error: java not found. Set JAVA_HOME or install JDK 17." >&2
+    exit 1
+  fi
+fi
+
+# Memory and default JVM options (mirrors key values from wrapper.conf)
+MULE_HEAP="${MULE_HEAP:-1024m}"
+
+# Log4j2 configuration (default to bundled conf/log4j2.xml)
+MULE_LOG4J2_CONFIG="${MULE_LOG4J2_CONFIG:-${MULE_HOME}/conf/log4j2.xml}"
+MULE_LOG4J2_ASYNC="${MULE_LOG4J2_ASYNC:-false}"
+
+DEFAULT_JVM_OPTS=(
+  "-Xms${MULE_HEAP}"
+  "-Xmx${MULE_HEAP}"
+  "-Dmule.home=${MULE_HOME}"
+  "-Dmule.base=${MULE_BASE}"
+  "-Dmule.bootstrap.container.wrapper.class=org.mule.runtime.module.boot.internal.MuleContainerBasicWrapper"
+  "-Djava.net.preferIPv4Stack=true"
+  "-Dorg.glassfish.grizzly.nio.transport.TCPNIOTransport.max-receive-buffer-size=1048576"
+  "-Dorg.glassfish.grizzly.nio.transport.TCPNIOTransport.max-send-buffer-size=1048576"
+  "-XX:MaxMetaspaceSize=256m"
+  "-XX:MetaspaceSize=128m"
+  "-XX:+HeapDumpOnOutOfMemoryError"
+  "-XX:+AlwaysPreTouch"
+  "-XX:NewRatio=1"
+  "-XX:MaxTenuringThreshold=8"
+  "-Dorg.quartz.scheduler.skipUpdateCheck=true"
+  "-Dmule.metadata.cache.entryTtl.minutes=10"
+  "-Dmule.metadata.cache.expirationInterval.millis=5000"
+  "-Djava.locale.providers=COMPAT,CLDR,SPI"
+  "-Dlog4j2.disable.jmx=true"
+  "-Dlog4j2.Script.enableLanguages=nashorn,js,javascript,ecmascript,groovy"
+  "-Dlog4j2.configurationFile=${MULE_LOG4J2_CONFIG}"
+  "-Dpolyglot.engine.WarnInterpreterOnly=false"
+  "-Dmule.module.tweaking.validation.skip=true"
+  "--add-opens=java.base/java.lang=ALL-UNNAMED"
+)
+
+if [[ "${MULE_DEBUG:-false}" == "true" ]]; then
+  DEFAULT_JVM_OPTS+=("-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005")
+fi
+
+if [[ "${MULE_VERBOSE:-false}" == "true" ]]; then
+  DEFAULT_JVM_OPTS+=("-Dmule.runtime.verbose=true")
+fi
+
+# Optional: enable Log4j2 async loggers when requested
+if [[ "${MULE_LOG4J2_ASYNC}" == "true" ]]; then
+  DEFAULT_JVM_OPTS+=("-DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector")
+fi
+
+# Allow user to append additional opts
+EXTRA_JVM_OPTS=( )
+if [[ -n "${MULE_JAVA_OPTS:-}" ]]; then
+  # shellcheck disable=SC2206
+  EXTRA_JVM_OPTS=( ${MULE_JAVA_OPTS} )
+fi
+
+# Classpath: default to URLClassLoader mode (no JPMS)
+MULE_JPMS="${MULE_JPMS:-false}"
+if [[ "$MULE_JPMS" == "true" ]]; then
+  CP="${MULE_HOME}/lib/boot/*:${MULE_HOME}/lib/mule/*"
+else
+  CP="${MULE_HOME}/lib/boot/*:${MULE_HOME}/lib/mule/*:${MULE_HOME}/lib/opt/*"
+  DEFAULT_JVM_OPTS+=("-Dmule.classloader.container.jpmsModuleLayer=false")
+fi
+
+MAIN_CLASS="org.mule.runtime.module.reboot.MuleContainerBootstrap"
+PIDFILE="${MULE_BASE}/.mule-run.pid"
+CONSOLE_OUT="${MULE_HOME}/logs/mule_console.out"
+
+run_foreground() {
+  exec "$JAVA_CMD" \
+    "${DEFAULT_JVM_OPTS[@]}" \
+    ${EXTRA_JVM_OPTS+"${EXTRA_JVM_OPTS[@]}"} \
+    -cp "$CP" \
+    "$MAIN_CLASS" "$@"
+}
+
+start_background() {
+  if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    echo "Mule already running (pid $(cat "$PIDFILE"))." >&2
+    exit 0
+  fi
+
+  # shellcheck disable=SC2086
+  nohup "$JAVA_CMD" \
+    "${DEFAULT_JVM_OPTS[@]}" \
+    ${EXTRA_JVM_OPTS+"${EXTRA_JVM_OPTS[@]}"} \
+    -cp "$CP" \
+    "$MAIN_CLASS" "$@" \
+    >"$CONSOLE_OUT" 2>&1 &
+
+  echo $! > "$PIDFILE"
+  disown || true
+  echo "Mule started (pid $(cat "$PIDFILE")); logs: $CONSOLE_OUT"
+}
+
+stop_process() {
+  if [[ ! -f "$PIDFILE" ]]; then
+    echo "No PID file at $PIDFILE (Mule not running?)" >&2
+    exit 1
+  fi
+
+  local pid
+  pid="$(cat "$PIDFILE")"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Process $pid not running. Removing stale PID file." >&2
+    rm -f "$PIDFILE"
+    exit 0
+  fi
+
+  echo "Stopping Mule (pid $pid) ..."
+  kill -TERM "$pid" 2>/dev/null || true
+
+  # Wait up to 60s for graceful shutdown
+  for i in {1..60}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$PIDFILE"
+      echo "Mule stopped."
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "Mule did not stop gracefully; sending SIGKILL." >&2
+  kill -KILL "$pid" 2>/dev/null || true
+  rm -f "$PIDFILE"
+}
+
+status_process() {
+  if [[ -f "$PIDFILE" ]]; then
+    local pid
+    pid="$(cat "$PIDFILE")"
+    if kill -0 "$pid" 2>/dev/null; then
+      echo "Running (pid $pid)"
+      exit 0
+    else
+      echo "Not running (stale pid $pid)"
+      exit 1
+    fi
+  else
+    # Try to infer from logs/ps when no pid file exists
+    if pgrep -f "${MAIN_CLASS}" >/dev/null 2>&1; then
+      echo "Running (pid unknown; no pid file)"
+      exit 0
+    fi
+    echo "Not running"
+    exit 3
+  fi
+}
+
+usage() {
+  cat >&2 <<EOF
+Run Mule 4.9 without Tanuki wrapper
+
+Commands:
+  run [args]     Run in foreground (ctrl+c to stop). Args are passed to Mule main.
+  start [args]   Start in background, write PID to ${PIDFILE}.
+  stop           Stop background process using PID.
+  status         Print running status.
+
+Env:
+  MULE_HOME, MULE_BASE, JAVA_HOME, MULE_HEAP, MULE_JAVA_OPTS, MULE_DEBUG
+
+Examples:
+  MULE_HEAP=2048m ./mule-container run
+  MULE_DEBUG=true ./mule-container start
+  ./mule-container stop && ./mule-container status
+EOF
+}
+
+cmd="${1:-run}"
+shift || true
+
+case "$cmd" in
+  run)
+    run_foreground "$@"
+    ;;
+  start)
+    start_background "$@"
+    ;;
+  stop)
+    stop_process
+    ;;
+  status)
+    status_process
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage
+    exit 2
+    ;;
+esac

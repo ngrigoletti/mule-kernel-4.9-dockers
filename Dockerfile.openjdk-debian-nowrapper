@@ -1,0 +1,59 @@
+# Use a Debian-based OpenJDK image - 887.5
+FROM openjdk:17-slim
+
+# Define environment variables.
+ENV BASE_INSTALL_DIR=/opt \
+   MULE_BASE=/opt/mule \
+   MULE_HOME=/opt/mule \
+   MULE_REPOSITORY=https://repository-master.mulesoft.org/nexus/content/repositories/releases \
+   MULE_USER=mule \
+   MULE_VERSION=4.9.0
+
+# Install required dependencies
+RUN apt-get update && \
+    apt-get install -y bash procps curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY ./mule ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/
+
+# Download and install mule-standalone
+RUN set -ex && \
+    cd ~ && \
+    MULE_URL=${MULE_REPOSITORY}/org/mule/distributions/mule-standalone/${MULE_VERSION}/mule-standalone-${MULE_VERSION}.tar.gz && \
+    echo "Downloading ${MULE_URL}" && \
+    curl -O  ${MULE_URL}&& \
+    tar -xzf mule-standalone-${MULE_VERSION}.tar.gz -C ${BASE_INSTALL_DIR} && \
+    rm mule-standalone-${MULE_VERSION}.tar.gz
+
+# Setup container logging
+RUN set -ex && \
+    mv ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/conf/mule-container-log4j2.xml ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/conf/log4j2.xml
+
+# Remove Tanuki wrapper
+RUN set -ex && \
+    cd ~ && \
+    rm -rf ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/lib/boot/tanuki
+
+# Create Mule group and user
+RUN groupadd -r ${MULE_USER} && useradd -r -m -c "Mule runtime user" ${MULE_USER} -g ${MULE_USER} && \ 
+    chown -R ${MULE_USER}:${MULE_USER} ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION} && \
+    ln -s ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION} ${MULE_HOME} && \
+    chmod 700 ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/bin/mule
+
+# Default user
+USER ${MULE_USER}
+
+# Define mount points.
+VOLUME ["${MULE_HOME}/logs", "${MULE_HOME}/conf", "${MULE_HOME}/apps", "${MULE_HOME}/domains"]
+
+# Define working directory.
+WORKDIR ${MULE_HOME}
+
+# Default http port
+EXPOSE 8081
+
+# Run mule in console mode (needed by Docker)
+#ENTRYPOINT ["tail", "-f", "/dev/null"]
+ENTRYPOINT ["./bin/mule-container"]
+CMD [""]
