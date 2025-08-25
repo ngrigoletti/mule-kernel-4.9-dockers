@@ -48,5 +48,5 @@ EXPOSE 8081
 
 # Run mule in console mode (needed by Docker)
 #ENTRYPOINT ["tail", "-f", "/dev/null"]
-ENTRYPOINT ["./bin/mule-container"]
+ENTRYPOINT ["./bin/mule"]
 CMD [""]
