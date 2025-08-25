@@ -43,7 +43,9 @@ COPY ./mule ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/
 # Download and install mule-standalone
 RUN set -eux && \
     cd ~ && \
-    curl -O ${MULE_REPOSITORY}/org/mule/distributions/mule-standalone/${MULE_VERSION}/mule-standalone-${MULE_VERSION}.tar.gz && \
+    MULE_URL=${MULE_REPOSITORY}/org/mule/distributions/mule-standalone/${MULE_VERSION}/mule-standalone-${MULE_VERSION}.tar.gz && \
+    echo "Downloading ${MULE_URL}" && \
+    curl -O  ${MULE_URL}&& \
     tar -xzf mule-standalone-${MULE_VERSION}.tar.gz -C ${BASE_INSTALL_DIR} && \
     rm mule-standalone-${MULE_VERSION}.tar.gz
 

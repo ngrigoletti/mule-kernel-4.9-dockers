@@ -20,7 +20,9 @@ COPY ./mule ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/
 # Download and install mule-standalone
 RUN set -ex && \
     cd ~ && \
-    curl -O ${MULE_REPOSITORY}/org/mule/distributions/mule-standalone/${MULE_VERSION}/mule-standalone-${MULE_VERSION}.tar.gz && \
+    MULE_URL=${MULE_REPOSITORY}/org/mule/distributions/mule-standalone/${MULE_VERSION}/mule-standalone-${MULE_VERSION}.tar.gz && \
+    echo "Downloading ${MULE_URL}" && \
+    curl -O  ${MULE_URL}&& \
     tar -xzf mule-standalone-${MULE_VERSION}.tar.gz -C ${BASE_INSTALL_DIR} && \
     rm mule-standalone-${MULE_VERSION}.tar.gz
 
@@ -28,10 +30,36 @@ RUN set -ex && \
 RUN set -ex && \
     mv ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/conf/mule-container-log4j2.xml ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/conf/log4j2.xml
 
+# Setup for Tanuki on linux docker running on MacOSX
+ENV TANUKI_REPO=https://download.tanukisoftware.com/wrapper \
+    TANUKI_SO=linux \
+    TANUKI_CPU=arm \
+    TANUKI_BIT=64 \
+    TANUKI_VERSION=3.5.51 \
+    TANUKI_LIB_EXT=so
+
+# Download Tanuki wrapper
+RUN set -ex && \
+    cd ~ && \
+    TANUKI_URL=${TANUKI_REPO}/${TANUKI_VERSION}/wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}.tar.gz && \
+    echo "Downloading ${TANUKI_URL}" && \
+    curl -O ${TANUKI_URL} && \
+    tar -xzvf wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}.tar.gz && \
+    rm wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}.tar.gz
+
+# Add Tanuki support for specific platform
+RUN set -ex && \
+    cd ~ && \
+    cp ./wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}/lib/libwrapper.${TANUKI_LIB_EXT} ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/lib/boot/tanuki/libwrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}.${TANUKI_LIB_EXT} && \
+    cp ./wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}/lib/wrapper.jar ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/lib/boot/tanuki/wrapper-3.2.3.jar && \
+    cp ./wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT}-${TANUKI_VERSION}/bin/wrapper ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/lib/boot/tanuki/exec/wrapper-${TANUKI_SO}-${TANUKI_CPU}-${TANUKI_BIT} && \
+    sed -i 's/case "$PROC_ARCH" in/case "$PROC_ARCH" in\n        arm64 | aarch64)\n            DIST_ARCH="arm"\n            DIST_BITS="64"\n            break;;/' ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/bin/mule
+
 # Create Mule group and user
 RUN groupadd -r ${MULE_USER} && useradd -r -m -c "Mule runtime user" ${MULE_USER} -g ${MULE_USER} && \ 
     chown -R ${MULE_USER}:${MULE_USER} ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION} && \
-    ln -s ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION} ${MULE_HOME} 
+    ln -s ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION} ${MULE_HOME} && \
+    chmod 700 ${BASE_INSTALL_DIR}/mule-standalone-${MULE_VERSION}/bin/mule
 
 # Default user
 USER ${MULE_USER}
