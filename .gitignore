@@ -1,0 +1,87 @@
+# General
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.pid
+*.seed
+*.bak
+*.old
+nohup.out
+
+# OS junk
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Archives
+*.tar
+*.gz
+*.bz2
+*.zip
+*.7z
+
+# Environment files
+.env
+.env.*
+
+# Editor/IDE
+.vscode/
+.idea/
+*.iml
+
+# Eclipse/STS
+.classpath
+.project
+.settings/
+
+# IntelliJ
+out/
+
+# VS Code local settings (keep workspace files)
+!.code-workspace
+
+# Java/Maven/Gradle
+target/
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Logs and data
+logs/
+*.log.*
+tmp/
+temp/
+data/
+
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
+.docker/
+.docker-build/
+
+# Node (if used inside containers)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python cache (if used in tooling)
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Mac-specific again (nested dirs)
+**/.DS_Store
+
+# Local tooling
+.tool-versions
+.sdkman/
+ 
+# Project-specific ignores
+repositories.code-workspace
