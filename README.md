@@ -9,7 +9,6 @@ The images expose port `8081`, mount common Mule folders as volumes, and run the
 - Dockerfile.eclipse-temurin-alpine: Alpine with official Eclipse Temurin 17 ~ 880MB
 - Dockerfile.eclipse-temurin-alpine-x86_64: Alpine with manually installed Temurin JDK 17 (amd64 only) ~ 763MB
 - Dockerfile.openjdk-debian: Debian slim with OpenJDK 17 (with support for Arm64 on MacOSX) ~ 890MB
-- Dockerfile.openjdk-debian-nowrapper: Debian slim with OpenJDK 17 w/o Tanuki wrapper (Experimental only!) ~ 867MB
 
 All variants:
 - Install Mule Standalone `4.9.0` under `/opt/mule-standalone-4.9.0` and symlink to `/opt/mule`.
@@ -36,8 +35,9 @@ docker build -t mule:4.9-temurin -f Dockerfile.eclipse-temurin-alpine .
 # Debian slim + OpenJDK (with support for Arm64 on MacOSX)
 docker build -t mule:4.9-debian -f Dockerfile.openjdk-debian .
 
-# Debian slim + OpenJDK without Tanuki wrapper
-docker build -t mule:4.9-debian -f Dockerfile.openjdk-debian-nowrapper .
+# (Deprecated) Debian slim + OpenJDK without Tanuki wrapper
+# This variant has been removed from this repo.
+# Use Dockerfile.openjdk-debian or see the dedicated repo if needed.
 ```
 
 Run the container:
@@ -105,7 +105,7 @@ All are declared as volumes in the image, so you can safely mount them from the 
 
 ## Architecture Notes
 
-- The default `Dockerfile` installs a Temurin JDK tarball for Alpine and currently targets `amd64`.
+- The `Dockerfile.eclipse-temurin-alpine-x86_64` image installs a Temurin JDK tarball for Alpine and targets `amd64`.
 - For Apple Silicon/arm64 or other architectures, prefer `Dockerfile.eclipse-temurin-alpine` or `Dockerfile.openjdk-debian`.
 
 ## docker-compose (optional)
@@ -129,7 +129,7 @@ services:
 
 ## Troubleshooting
 
-- Build fails on non-amd64 with `Dockerfile`: use the Temurin or Debian variant.
+- Build fails on non-amd64 with `Dockerfile.eclipse-temurin-alpine-x86_64`: use the Temurin or Debian variant.
 - No logs on console: verify `conf/log4j2.xml` exists inside the container (it is created at build time) and that you're not overriding `conf` with an empty host mount.
 - App not starting: check `/opt/mule/logs/mule.log` for deployment errors.
 

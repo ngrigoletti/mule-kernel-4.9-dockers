@@ -1,0 +1,28 @@
+# Ignore VCS and editor junk
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.code-workspace
+repositories.code-workspace
+
+# Build caches and dependencies
+node_modules/
+target/
+build/
+.gradle/
+
+# Local data and logs
+data/
+logs/
+tmp/
+temp/
+
+# Archives
+*.tar
+*.gz
+*.bz2
+*.zip
+*.7z
